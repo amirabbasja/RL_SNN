@@ -440,3 +440,114 @@ def saveModel(data, location, backup = True):
     
     # Save the data
     torch.save(data, location)
+    
+import os
+import torch
+import argparse
+
+def loadNetwork(fileName, **kwargs):
+    """
+    Loads the previous training details from a file. The file should be 
+    a dictionary, with all the details necessary to pickup where you left.
+    The necessary data are explained below.
+    
+    Args:
+        fileName (str): The name of the file
+        kwargs (dict): A dictionary with the following keys:
+            qNetwork_model (torch.nn): The qNetwork_model
+            optimizer_main (torch.optim): The qNetwork_model's optimizer 
+                object
+            targetQNetwork_model (torch.nn): The targetQNetwork_model
+            trainingParams (list): A list containing following parameters
+                in order. We chose this approach to be able to change training 
+                parameters in-place:
+                startEpisode (int): The episode number to start from
+                startEbsilon (int): The starting ebsilon number (The ebsilon 
+                    prior to latest run's termination)
+                lstHistory (list): The list holding the training history
+                eDecay (float): The decay of ebsilon
+                mem (ReplayMemory): An instance of replay memory object
+    """
+    # Check if all necessary data has been given so it can be overwritten 
+    # when loaded and passed back to the user
+    assert "qNetwork_model" in kwargs.keys(), "Please pass the qNetwork_model object"
+    assert "optimizer_main" in kwargs.keys(), "Please pass the optimizer_main object"
+    assert "targetQNetwork_model" in kwargs.keys(), "Please pass the targetQNetwork_model object"
+    assert "trainingParams" in kwargs.keys(), "Please pass the trainingParams object"
+    assert len(kwargs["trainingParams"]) == 5, "You should enter the following parameters in the order:\nstartEpisode, startEbsilon, lstHistory, eDecay, mem"
+    
+    if os.path.isfile(fileName):
+        try:
+            # Try to read the main file
+            try:
+                __data = torch.load(fileName, weights_only = False)
+            except:
+                print("Couldn't load the main file, trying to load the backup file")
+                try:
+                    # Try to read the backup file
+                    __data = torch.load(os.path.join(os.path.dirname(fileName), "Backups", os.path.basename(fileName)), weights_only = False)
+                except Exception as e:
+                    raise Exception(f"Couldn't load the backup file")
+            
+            # Check if the file is a dictionary
+            if not isinstance(__data, dict): raise Exception(f"Couldn't load the file. File {fileName} is not a dictionary")
+
+            # Load Q-Network
+            kwargs["qNetwork_model"].load_state_dict(__data["qNetwork_state_dict"]) # Model weights
+            kwargs["optimizer_main"].load_state_dict(__data["qNetwork_optimizer_state_dict"]) # Optimizer
+
+            # Load target Q-Network
+            kwargs["targetQNetwork_model"].load_state_dict(__data["targetQNetwork_state_dict"]) # Model weights
+
+            # Load process parameters
+            kwargs["trainingParams"][0] = __data["episode"] # Starting episode number
+            kwargs["trainingParams"][1] = __data["hyperparameters"]["ebsilon"] # Starting ebsilon
+            kwargs["trainingParams"][2] = __data["train_history"]
+            kwargs["trainingParams"][3] = __data["hyperparameters"]["eDecay"]
+
+            kwargs["trainingParams"][4].loadExperiences(
+                __data["experiences"]["state"],
+                __data["experiences"]["action"],
+                __data["experiences"]["reward"],
+                __data["experiences"]["nextState"],
+                __data["experiences"]["done"],
+            )
+            
+            # All changes are in-place, however, we return the changed objects for convenience
+            return (
+                kwargs["qNetwork_model"],
+                kwargs["optimizer_main"],
+                kwargs["targetQNetwork_model"],
+                kwargs["trainingParams"][0],  # startEpisode
+                kwargs["trainingParams"][1],  # startEbsilon
+                kwargs["trainingParams"][2],  # lstHistory
+                kwargs["trainingParams"][3],  # eDecay
+                kwargs["trainingParams"][4]   # mem
+            )
+            
+        except Exception as e:
+            print("ERROR: ", e)
+            return None
+    else:
+        raise Exception(f"Couldn't load the file. File {fileName} does not exist")
+
+def modelParamParser():
+    """
+    Gets the arguments from the command line for the model to run
+    """
+    # Make the argument parser
+    parser = argparse.ArgumentParser(description = "The neural network with specified parameters")
+    
+    # Add necessary arguments
+    parser.add_argument("--name", "-n", type = str, default = "parallelDQN", help = "The name of the model")
+    parser.add_argument("--continue_run", "-c", action = "store_true", help = "Continue the last run")
+    parser.add_argument("--agents", "-a", type = int, default = 1, help = "Number rof agents")
+    parser.add_argument("--hidden_layers", "-hl", type = int, nargs = "+", default = [64, 64], help = "Hidden layer size")
+    parser.add_argument("--learning_rate", "-lr", type = float, default = 0.0001, help = "Learning rate")
+    parser.add_argument("--decay", "-d", type = float, default = 0.999, help = "Ebsilon decay rate")
+    parser.add_argument("--batch", "-b", type = int, default = 1000, help = "The mini-batch size")
+    parser.add_argument("--gamma", "-g", type = float, default = 0.995, help = "Discount factor")
+    parser.add_argument("--extra_info", "-extra", type = str, default = "", help = "Extra information")
+    parser.add_argument("--max_run_time", "-t", type = int, default = 60 * 60, help = "Maximum run time of training in seconds")
+    
+    return parser
