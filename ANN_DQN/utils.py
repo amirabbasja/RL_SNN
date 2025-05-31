@@ -1,5 +1,7 @@
 from collections import deque, namedtuple
 import os
+import argparse
+
 
 from tqdm import tqdm
 import pandas as pd
@@ -441,10 +443,6 @@ def saveModel(data, location, backup = True):
     # Save the data
     torch.save(data, location)
     
-import os
-import torch
-import argparse
-
 def loadNetwork(fileName, **kwargs):
     """
     Loads the previous training details from a file. The file should be 
@@ -466,6 +464,7 @@ def loadNetwork(fileName, **kwargs):
                     prior to latest run's termination)
                 lstHistory (list): The list holding the training history
                 eDecay (float): The decay of ebsilon
+                NUM_ENVS (int): The number of agents
                 mem (ReplayMemory): An instance of replay memory object
     """
     # Check if all necessary data has been given so it can be overwritten 
@@ -474,7 +473,7 @@ def loadNetwork(fileName, **kwargs):
     assert "optimizer_main" in kwargs.keys(), "Please pass the optimizer_main object"
     assert "targetQNetwork_model" in kwargs.keys(), "Please pass the targetQNetwork_model object"
     assert "trainingParams" in kwargs.keys(), "Please pass the trainingParams object"
-    assert len(kwargs["trainingParams"]) == 5, "You should enter the following parameters in the order:\nstartEpisode, startEbsilon, lstHistory, eDecay, mem"
+    assert len(kwargs["trainingParams"]) != 5, "You should enter the following parameters in the order:\nstartEpisode, startEbsilon, lstHistory, eDecay, mem"
     
     if os.path.isfile(fileName):
         try:
@@ -504,15 +503,16 @@ def loadNetwork(fileName, **kwargs):
             kwargs["trainingParams"][1] = __data["hyperparameters"]["ebsilon"] # Starting ebsilon
             kwargs["trainingParams"][2] = __data["train_history"]
             kwargs["trainingParams"][3] = __data["hyperparameters"]["eDecay"]
+            kwargs["trainingParams"][4] = __data["hyperparameters"]["NUM_ENVS"]
 
-            kwargs["trainingParams"][4].loadExperiences(
+            kwargs["trainingParams"][5].loadExperiences(
                 __data["experiences"]["state"],
                 __data["experiences"]["action"],
                 __data["experiences"]["reward"],
                 __data["experiences"]["nextState"],
                 __data["experiences"]["done"],
             )
-            
+
             # All changes are in-place, however, we return the changed objects for convenience
             return (
                 kwargs["qNetwork_model"],
@@ -522,9 +522,10 @@ def loadNetwork(fileName, **kwargs):
                 kwargs["trainingParams"][1],  # startEbsilon
                 kwargs["trainingParams"][2],  # lstHistory
                 kwargs["trainingParams"][3],  # eDecay
-                kwargs["trainingParams"][4]   # mem
+                kwargs["trainingParams"][4],  # environment/agent number
+                kwargs["trainingParams"][5],  # mem
             )
-            
+
         except Exception as e:
             print("ERROR: ", e)
             return None

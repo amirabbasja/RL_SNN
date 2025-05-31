@@ -65,7 +65,7 @@ if __name__ == "__main__":
     continueLastRun = args.continue_run
 
     # handle the save location
-    modelDetails = f"{'_'.join([str(l) for l in hiddenNodes])}_{learningRate}_{eDecay}_{miniBatchSize}_{gamma}_{extraInfo}"
+    modelDetails = f"{'_'.join([str(l) for l in hiddenNodes])}_{learningRate}_{eDecay}_{miniBatchSize}_{gamma}_{NUM_ENVS}_{extraInfo}"
     savePath = os.path.join(savePath, f"{projectName}_{modelDetails}")
     os.makedirs(savePath, exist_ok=True)
 
@@ -106,7 +106,8 @@ if __name__ == "__main__":
             "targetQNetwork_model": targetQNetwork_model,
             "trainingParams": [startEpisode, startEbsilon, lstHistory, eDecay, mem]
         }
-        qNetwork_model, optimizer_main, targetQNetwork_model, startEpisode, startEbsilon, lstHistory, eDecay, mem =loadNetwork(os.path.join(savePath, saveFileName), **load_params)
+        # NUM_ENVS is a constant and is defined when running the script for the first time, So we disregard re-loading it
+        qNetwork_model, optimizer_main, targetQNetwork_model, startEpisode, startEbsilon, lstHistory, eDecay, _, mem = loadNetwork(os.path.join(savePath, saveFileName), **load_params)
         print("Continuing from episode:", startEpisode)
 
     print(f"Device is: {__device}")
@@ -211,7 +212,8 @@ if __name__ == "__main__":
                         'qNetwork_optimizer_state_dict': optimizer_main.state_dict(),
                         'targetQNetwork_state_dict': targetQNetwork_model.state_dict(),
                         'targetQNetwork_optimizer_state_dict': optimizer_target.state_dict(),
-                        'hyperparameters': {"ebsilon": ebsilon, "eDecay":eDecay},
+                        'hyperparameters': {"ebsilon": ebsilon, "eDecay": eDecay, "NUM_ENVS": NUM_ENVS},
+                        "elapsedTime": int(time.time() - tstart),
                         "train_history": lstHistory,
                         "experiences": {
                             "state": _exp["state"],
@@ -248,8 +250,9 @@ if __name__ == "__main__":
                 'qNetwork_optimizer_state_dict': optimizer_main.state_dict(),
                 'targetQNetwork_state_dict': targetQNetwork_model.state_dict(),
                 'targetQNetwork_optimizer_state_dict': optimizer_target.state_dict(),
-                'hyperparameters': {"ebsilon": ebsilon, "eDecay":eDecay},
+                'hyperparameters': {"ebsilon": ebsilon, "eDecay":eDecay, "NUM_ENVS": NUM_ENVS},
                 "train_history": lstHistory,
+                "elapsedTime": int(time.time() - tstart),
                 "experiences": {
                     "state": _exp["state"],
                     "action": _exp["action"],

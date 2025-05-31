@@ -5,19 +5,19 @@ import time
 import sys
 
 startTime = time.time()
-endTime = startTime + 4 * 60 * 60  # 4 hours
-maxRunTime = 60 * 60 # 1 hour
+endTime = startTime + 3.5 * 60 * 60  # 3.5 hours
+maxRunTime = 45 * 60  # 45 min
 
 trainingEpoch = 1
 while time.time() < endTime:
     # Run parameters
     argsDict = {
         "name": "parallelDQN",
-        "continue_run": True,
+        "continue_run": False,
         "agents": 1,
         "hidden_layers": [64, 64],
         "learning_rate": 0.0001,
-        "decay": 0.999,
+        "decay": 0.9995,
         "batch": 1000,
         "gamma": 0.995,
         "extra_info": "",
@@ -36,8 +36,8 @@ while time.time() < endTime:
         else:
             scriptArgs.extend([f"--{name}", str(value)])
 
-    venvPath = "C:/Users/Spino.shop/Desktop/Trading/Apps/.MotherVenv/Scripts/python.exe"
-    scriptPath = "./ANN_DQN/ANN_EXAMPLE_2_onefile.py"
+    venvPath = "python"
+    scriptPath = "./ANN_EXAMPLE_2_onefile.py"
 
     command = [venvPath, scriptPath] + scriptArgs
 
