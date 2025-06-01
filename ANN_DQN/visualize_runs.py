@@ -125,16 +125,14 @@ def plot_training_histories(directory_path):
             # Add text box with statistics and parameters
             stats_text = f"Max: {max_points:.2f}\nMin: {min_points:.2f}\nAvg: {avg_points:.2f}"
             ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, verticalalignment='top', 
-                bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8)
-            )
+                   bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
             
             runDetails = f"Envs: {model_info['numENVS']} | Gamma: {model_info['gamma']} | Batch: {model_info['miniBatchSize']} | Decay {model_info['eDecay']} | lr: {model_info['learningrate']} | Hidden {model_info['hiddenNodes']}"
             # Add parameter information on the right side
             ax.text(0.98, 0.98, runDetails, transform=ax.transAxes, 
-                verticalalignment='top', horizontalalignment='right',
-                bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8),
-                fontsize=9
-            )
+                   verticalalignment='top', horizontalalignment='right',
+                   bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8),
+                   fontsize=9)
             
         except Exception as e:
             print(f"Error processing {pth_file.name}: {str(e)}")
@@ -151,7 +149,8 @@ def plot_training_histories(directory_path):
     plt.tight_layout()
     plt.suptitle(f"Training Histories from {dir_path.name}", fontsize=16, y=0)
     plt.show()
-    plt.savefig("savedFig.png")
+    os.makedirs("./Data", exist_ok = True)
+    plt.savefig("./Data/savedFig.png")
     
     return fig
 

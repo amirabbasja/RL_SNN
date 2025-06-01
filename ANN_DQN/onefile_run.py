@@ -1,27 +1,30 @@
 # Runs the training script with desired parameters
-import subprocess
-import os
-import time
-import sys
+import subprocess, os, time, sys, json
+
+# Open and read run configuration
+assert os.path.exists("conf.json"), "conf.json file doesn't exist"
+with open('conf.json', 'r') as file:
+    data = json.load(file)
 
 startTime = time.time()
-endTime = startTime + 3.5 * 60 * 60  # 3.5 hours
-maxRunTime = 45 * 60  # 45 min
+endTime = startTime + data["train_max_time"]  # 3.5 hours
+maxRunTime = data["max_run_time"]  # 45 min
 
 trainingEpoch = 1
 while time.time() < endTime:
     # Run parameters
     argsDict = {
-        "name": "parallelDQN",
-        "continue_run": False,
-        "agents": 1,
-        "hidden_layers": [64, 64],
-        "learning_rate": 0.0001,
-        "decay": 0.9995,
-        "batch": 1000,
-        "gamma": 0.995,
+        "name": data["name"],
+        "continue_run": data["continue_run"],
+        "agents": data["agents"],
+        "hidden_layers": data["hidden_layers"],
+        "learning_rate": data["learning_rate"],
+        "decay": data["decay"],
+        "batch": data["batch"],
+        "gamma": data["gamma"],
         "extra_info": "",
-        "max_run_time": maxRunTime, # In seconds
+        "max_run_time": data["max_run_time"], # In seconds
+        "upload_history": data["upload_history"]
     }
 
     # For passing the args to the script
@@ -29,6 +32,10 @@ while time.time() < endTime:
     for name, value in argsDict.items():
         if name == "continue_run":
             scriptArgs.extend([f"--continue_run"]) if value else None
+            continue
+        
+        if name == "upload_history":
+            scriptArgs.extend([f"--upload_history"]) if value else None
             continue
         
         if name == "hidden_layers":
@@ -40,7 +47,7 @@ while time.time() < endTime:
     scriptPath = "./ANN_EXAMPLE_2_onefile.py"
 
     command = [venvPath, scriptPath] + scriptArgs
-
+    
     try:
         # Set environment to force unbuffered output
         env = os.environ.copy()

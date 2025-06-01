@@ -1,0 +1,14 @@
+{
+    "name": "parallelDQN",
+    "continue_run": false,
+    "agents": 8,
+    "hidden_layers": [64, 64],
+    "learning_rate": 0.0001,
+    "decay": 0.9995,
+    "batch": 1000,
+    "gamma": 0.995,
+    "extra_info": "",
+    "max_run_time": 2700, 
+    "train_max_time": 12600,
+    "upload_history": true
+}

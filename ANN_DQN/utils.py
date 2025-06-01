@@ -1,6 +1,7 @@
 from collections import deque, namedtuple
 import os
 import argparse
+from typing import Union, Dict
 
 
 from tqdm import tqdm
@@ -420,7 +421,7 @@ def testAgent(envName:str, network, __device, __dtype, saveVideoName:str = "", )
 
     return point
 
-def saveModel(data, location, backup = True):
+def saveModel(data, location, backup = True, upload = {}):
     """
     Saves the provided data using pytorch's save function. For avoiding 
     data loss, a backup file is created before the data overwritten into 
@@ -431,7 +432,8 @@ def saveModel(data, location, backup = True):
         data: any: The data to be saved
         location: string: The location to save the data. Should contain the 
             file name.
-        backup: bool: If True, a backup of the old file will be created.
+        backup: bool: If True, a backup of the old file will be created in
+            <Backup> directory inside the provided location.
     """
     # First create a backup if the file exists
     if backup:
@@ -442,7 +444,117 @@ def saveModel(data, location, backup = True):
     
     # Save the data
     torch.save(data, location)
+
+def backUpToCloud(filePath = None, obj = None, objName = None, info: dict = None) -> Union[str, None]:
+    """
+    Uploads the data to the cloud. Currently only uses huggingface. Will
+    create the repository if it doesn't exist.
     
+    Args:
+        filePath: string: Path to the file you trying to upload (optional
+            if obj is provided).
+        obj: object: Python object to save and upload (optional if filePath
+            is provided).
+        objName: string: Name for the object file (required if obj is provided).
+        info: dict: The information about the data and saving location. Example 
+        below:
+            info = {
+                "platform": "huggingface",
+                "api": api, # api = HfApi()
+                "repoID": f"{your_username}/{your_dataset_name}",
+                "dirName": "Data", # The directory to save the data (inside repo)
+                "private": False # Upload as a private repo (optional, defaults 
+                    to false)
+                "replace": False # Replaces the old file if already exists
+                    (optional,  defaults to false)
+            }
+        
+    Returns:
+        location: string: The location of the file in the cloud, None if failed
+    """
+    import tempfile
+    
+    # Validate inputs
+    if filePath is None and obj is None:
+        raise ValueError("Either filePath or obj must be provided")
+    if obj is not None and objName is None:
+        raise ValueError("objName must be provided when uploading an object")
+    
+    # Asserts for info dictionary
+    assert info is not None, "info dictionary is required"
+    assert "platform" in info.keys(), "Platform not specified in info dictionary"
+    assert "dirName" in info.keys(), "dirName not specified in info dictionary"
+    assert "api" in info.keys(), "Enter an api object to interact with"
+    assert info["platform"] == "huggingface", "Only huggingface platform is supported"
+    assert "repoID" in info.keys(), "repoID not specified in info dictionary" # f"{your_username}/{your_dataset_name}"
+    
+    temp_file_path = None
+    try:
+        # Handle object saving using saveModel function
+        if obj is not None:
+            # Create temporary file path for the object
+            temp_file_path = f"{tempfile.gettempdir()}/{objName}.pth"
+            
+            # Use the existing saveModel function to save the object
+            saveModel(obj, temp_file_path, backup=False)
+            
+            # Use the temporary file as the upload source
+            upload_file_path = temp_file_path
+        else:
+            # Use the provided file path
+            assert os.path.isfile(filePath), "File not found"
+            upload_file_path = filePath
+        
+        # Setup the necessary variables
+        __api = info["api"]
+        __repoID = info["repoID"]
+        __dirName = info["dirName"]
+        
+        # Create the file path in repo with directory structure
+        if __dirName and __dirName.strip():  # Check if dirName is not empty
+            __filePathInRepo = f"{__dirName}/{os.path.basename(upload_file_path)}"
+        else:
+            __filePathInRepo = f"{os.path.basename(upload_file_path)}"
+        
+        # Create the repo if it doesn't exist
+        try:
+            __api.create_repo(repo_id = __repoID, repo_type = "model", private = False if "private" not in info.keys() else info["private"])
+        except Exception as repo_error:
+            # Repository might already exist, continue with upload
+            pass
+        
+        # Check if file exists in the repository and delete it
+        if (info["replace"] if "replace" in info.keys() else False):
+            try:                
+                # Try to delete the existing file
+                __api.delete_file(
+                    path_in_repo = __filePathInRepo,
+                    repo_id = __repoID
+                )
+            except Exception as delete_error:
+                # File might not exist, continue with upload
+                pass
+        
+        # Push the dataset to the Hugging Face Hub
+        msg = __api.upload_file(
+            path_or_fileobj = upload_file_path,
+            path_in_repo = __filePathInRepo, 
+            repo_id = __repoID
+        )
+        
+        return msg
+        
+    except Exception as e:
+        print(e)
+        return None
+    finally:
+        # Clean up temporary file if created
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except:
+                pass  # Ignore cleanup errors
+
 def loadNetwork(fileName, **kwargs):
     """
     Loads the previous training details from a file. The file should be 
@@ -550,5 +662,6 @@ def modelParamParser():
     parser.add_argument("--gamma", "-g", type = float, default = 0.995, help = "Discount factor")
     parser.add_argument("--extra_info", "-extra", type = str, default = "", help = "Extra information")
     parser.add_argument("--max_run_time", "-t", type = int, default = 60 * 60, help = "Maximum run time of training in seconds")
+    parser.add_argument("--upload_history", "-u", action = "store_true", help = "Upload the training history to cloud")
     
     return parser

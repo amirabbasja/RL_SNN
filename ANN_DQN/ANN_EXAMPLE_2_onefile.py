@@ -1,11 +1,14 @@
 from models import qNetwork_ANN
 from collections import deque, namedtuple
+from huggingface_hub import HfApi, login
 import os
 import argparse
 from utils import *
 from IPython.display import clear_output
 
 import sys
+import dotenv
+
 from tqdm import tqdm
 import pandas as pd
 import random, imageio, time, copy
@@ -19,6 +22,31 @@ import torch
 # Parse model arguments
 parser = modelParamParser()
 args, unknown = parser.parse_known_args()
+
+# Load necessary environment variables
+dotenv.load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+session_name = os.getenv("session_name")
+
+uploadInfo = None
+uploadToCloud = args.upload_history
+uploadCounter = 0
+if uploadToCloud:
+    # Login to huggingface
+    huggingface_read = os.getenv("huggingface_read")
+    huggingface_write = os.getenv("huggingface_write")
+    repoID = os.getenv("repo_ID")
+    api = HfApi()
+    login(token = huggingface_write)
+    
+    uploadInfo = {
+        "platform": "huggingface",
+        "api": api,
+        "repoID": repoID,
+        "dirName": "",
+        "private": False,
+        "replace": True
+    }
+
 
 # Define the super parameters
 projectName = args.name
@@ -68,6 +96,10 @@ if __name__ == "__main__":
     modelDetails = f"{'_'.join([str(l) for l in hiddenNodes])}_{learningRate}_{eDecay}_{miniBatchSize}_{gamma}_{NUM_ENVS}_{extraInfo}"
     savePath = os.path.join(savePath, f"{projectName}_{modelDetails}")
     os.makedirs(savePath, exist_ok=True)
+    
+    # Set the upload directory name
+    if uploadToCloud:
+        uploadInfo["dirName"] = f"./{session_name}-{projectName}_{modelDetails}"
 
     # Get how many times the model has been trained and add it to the file name
     runNumber =  len([f for f in os.listdir(savePath) if f"{modelDetails}" in f]) if savePath != None else ""
@@ -225,6 +257,12 @@ if __name__ == "__main__":
                     }
                     
                     saveModel(backUpData, os.path.join(savePath, saveFileName))
+                    
+                    # Only save the history and with lower frequency
+                    if(uploadCounter % 10 == 0):
+                        backUpToCloud(obj = lstHistory, objName = f"{session_name}-History-{saveFileName}", info = uploadInfo)
+                    
+                    uploadCounter += 1
 
                     # Save the episode number
                     latestCheckpoint = episode
@@ -263,6 +301,7 @@ if __name__ == "__main__":
             }
             
             saveModel(backUpData, os.path.join(savePath, saveFileName))
+            backUpToCloud(os.path.join(savePath, saveFileName), uploadInfo)
 
             # Save the episode number
             latestCheckpoint = episode
