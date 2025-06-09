@@ -112,10 +112,17 @@ def plot_training_histories(directory_path):
             
             # Plot points vs episodes
             ax.plot(df['episode'], df['points'], linewidth=1)
+            
+            # Calculate and plot rolling average of latest 100 episodes
+            if len(df) >= 100:
+                rolling_avg = df['points'].rolling(window=100, min_periods=1).mean()
+                ax.plot(df['episode'], rolling_avg, color='red', linewidth=2)
+            
             ax.set_title(f"Run {model_info['runNumber']} - {checkpoint['elapsedTime']}s", fontsize=12, fontweight='bold')
             ax.set_xlabel('Episode')
             ax.set_ylabel('Points')
             ax.grid(True, alpha=0.3)
+            ax.legend()
             
             # Add some statistics to the plot
             max_points = df['points'].max()
@@ -124,15 +131,15 @@ def plot_training_histories(directory_path):
             
             # Add text box with statistics and parameters
             stats_text = f"Max: {max_points:.2f}\nMin: {min_points:.2f}\nAvg: {avg_points:.2f}"
-            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, verticalalignment='top', 
-                   bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
             
             runDetails = f"Envs: {model_info['numENVS']} | Gamma: {model_info['gamma']} | Batch: {model_info['miniBatchSize']} | Decay {model_info['eDecay']} | lr: {model_info['learningrate']} | Hidden {model_info['hiddenNodes']}"
             # Add parameter information on the right side
             ax.text(0.98, 0.98, runDetails, transform=ax.transAxes, 
-                   verticalalignment='top', horizontalalignment='right',
-                   bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8),
-                   fontsize=9)
+                verticalalignment='top', horizontalalignment='right',
+                bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8),
+                fontsize=9
+            )
             
         except Exception as e:
             print(f"Error processing {pth_file.name}: {str(e)}")

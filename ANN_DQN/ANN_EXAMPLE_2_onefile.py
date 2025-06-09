@@ -30,6 +30,7 @@ session_name = os.getenv("session_name")
 uploadInfo = None
 uploadToCloud = args.upload_history
 uploadCounter = 0
+lastUploadTime = 0
 if uploadToCloud:
     # Login to huggingface
     huggingface_read = os.getenv("huggingface_read")
@@ -258,9 +259,11 @@ if __name__ == "__main__":
                     
                     saveModel(backUpData, os.path.join(savePath, saveFileName))
                     
-                    # Only save the history and with lower frequency
-                    if(uploadCounter % 10 == 0):
-                        backUpToCloud(obj = lstHistory, objName = f"{session_name}-History-{saveFileName}", info = uploadInfo)
+                    # Only save the history and with lower frequency. 
+                    # Re-upload no sooner than every minute (To avoid being rate-limited)
+                    if(uploadCounter % 10 == 0) and (lastUploadTime + 60 < time.time()):
+                        __data = {"train_history": lstHistory, "elapsedTime": int(time.time() - tstart)}
+                        backUpToCloud(obj = __data, objName = f"{session_name}-History-{saveFileName}", info = uploadInfo)
                     
                     uploadCounter += 1
 

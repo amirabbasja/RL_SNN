@@ -493,7 +493,11 @@ def backUpToCloud(filePath = None, obj = None, objName = None, info: dict = None
         # Handle object saving using saveModel function
         if obj is not None:
             # Create temporary file path for the object
-            temp_file_path = f"{tempfile.gettempdir()}/{objName}.pth"
+            # Check if objName already has .pth extension to avoid double extension
+            if objName.endswith('.pth'):
+                temp_file_path = f"{tempfile.gettempdir()}/{objName}"
+            else:
+                temp_file_path = f"{tempfile.gettempdir()}/{objName}.pth"
             
             # Use the existing saveModel function to save the object
             saveModel(obj, temp_file_path, backup=False)

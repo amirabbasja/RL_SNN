@@ -2,15 +2,22 @@ import os, shutil, dotenv, tempfile
 from huggingface_hub import HfApi, login
 from pathlib import Path
 from utils import *
+import dotenv
 
 class HuggingFaceRepoManager:
-    def __init__(self):
-        # Get environment variables
-        dotenv.load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-        self.session_name = os.getenv("session_name")
-        self.huggingface_read = os.getenv('huggingface_read')
-        self.huggingface_write = os.getenv('huggingface_write')
-        self.repo_id = os.getenv('repo_ID')
+    def __init__(self, sessionName, huggingfaceRead, huggingfaceWrite, repoID):
+        """
+        Args: 
+            sessionName (str): Name of the session
+            huggingfaceRead (str): HuggingFace read token
+            huggingfaceWrite (str): HuggingFace write token
+            repoID (str): HuggingFace repository ID
+        """
+        # Set necessary variables
+        self.session_name = sessionName
+        self.huggingface_read = huggingfaceRead
+        self.huggingface_write = huggingfaceWrite
+        self.repo_id = repoID
         
         # Validate required environment variables
         if not all([self.session_name, self.huggingface_read, self.huggingface_write, self.repo_id]):
@@ -126,22 +133,188 @@ class HuggingFaceRepoManager:
 
                     file = os.path.join(dirPath, file)
                     __data = torch.load(file, weights_only = False)
+                    __data = {"train_history": __data["train_history"], "elapsedTime": __data["elapsedTime"]}
                     
-                    backUpToCloud(obj = __data["train_history"], objName = f"{self.session_name}-{os.path.splitext(os.path.basename(file))[0]}", info = __info)
+                    backUpToCloud(obj = __data, objName = f"{self.session_name}-{os.path.splitext(os.path.basename(file))[0]}", info = __info)
         except Exception as e:
             print(f"Error uploading directory contents: {str(e)}")
+            raise
+    
+    def downloadRepoContents(self, local_dir=None, repo_path=None, file_pattern=None, force_download=False):
+        """
+        Downloads repository content to local machine.
+        
+        Args:
+            local_dir (str, optional): Local directory to download files to. 
+                Defaults to './downloads/{repo_id}'
+            repo_path (str, optional): Specific path/directory in the repo to download.
+                If None, downloads entire repository.
+            file_pattern (str, optional): Pattern to filter files (e.g., '*.pth', '*.json').
+                If None, downloads all files.
+            force_download (bool, optional): If True, download files even if they already exist locally.
+                If False, skip files that already exist. Defaults to False.
+        
+        Returns:
+            str: Path to the downloaded content
+        """
+        try:
+            # Set default local directory
+            if local_dir is None:
+                local_dir = f"./downloads/{self.repo_id.replace('/', '_')}"
+            
+            # Create local directory if it doesn't exist
+            local_path = Path(local_dir)
+            local_path.mkdir(parents=True, exist_ok=True)
+            
+            # Get list of all files in the repository
+            repo_files = self.api.list_repo_files(repo_id=self.repo_id)
+            
+            # Filter files based on repo_path if provided
+            if repo_path:
+                # Normalize path (ensure it ends with / for directories)
+                if not repo_path.endswith('/') and not '.' in os.path.basename(repo_path):
+                    repo_path += '/'
+                repo_files = [f for f in repo_files if f.startswith(repo_path)]
+                
+                if not repo_files:
+                    print(f"No files found in repository path: {repo_path}")
+                    return str(local_path)
+            
+            # Filter files based on pattern if provided
+            if file_pattern:
+                import fnmatch
+                repo_files = [f for f in repo_files if fnmatch.fnmatch(f, file_pattern)]
+                
+                if not repo_files:
+                    print(f"No files found matching pattern: {file_pattern}")
+                    return str(local_path)
+            
+            print(f"Found {len(repo_files)} files to download")
+            
+            # Download each file
+            downloaded_count = 0
+            skipped_count = 0
+            for file_path in repo_files:
+                try:
+                    # Create local file path
+                    local_file_path = local_path / file_path
+                    
+                    # Check if file already exists
+                    if not force_download and local_file_path.exists():
+                        print(f"Skipped (already exists): {file_path}")
+                        skipped_count += 1
+                        continue
+                    
+                    # Create parent directories if they don't exist
+                    local_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Download the file
+                    self.api.hf_hub_download(
+                        repo_id=self.repo_id,
+                        filename=file_path,
+                        local_dir=str(local_path),
+                        local_dir_use_symlinks=False,
+                        force_download=force_download
+                    )
+                    
+                    print(f"Downloaded: {file_path}")
+                    downloaded_count += 1
+                    
+                except Exception as e:
+                    print(f"Failed to download {file_path}: {str(e)}")
+            
+            print(f"Download completed: {downloaded_count} files downloaded, {skipped_count} files skipped to {local_path}")
+            return str(local_path)
+            
+        except Exception as e:
+            print(f"Error downloading repository content: {str(e)}")
+            raise
+    
+    def downloadSpecificFiles(self, file_list, local_dir=None, force_download=False):
+        """
+        Downloads specific files from the repository.
+        
+        Args:
+            file_list (list): List of file paths in the repository to download
+            local_dir (str, optional): Local directory to download files to.
+                Defaults to './downloads/{repo_id}'
+            force_download (bool, optional): If True, download files even if they already exist locally.
+                If False, skip files that already exist. Defaults to False.
+        
+        Returns:
+            str: Path to the downloaded content
+        """
+        try:
+            # Set default local directory
+            if local_dir is None:
+                local_dir = f"./downloads/{self.repo_id.replace('/', '_')}"
+            
+            # Create local directory if it doesn't exist
+            local_path = Path(local_dir)
+            local_path.mkdir(parents=True, exist_ok=True)
+            
+            print(f"Downloading {len(file_list)} specific files")
+            
+            # Download each file
+            downloaded_count = 0
+            skipped_count = 0
+            for file_path in file_list:
+                try:
+                    # Create local file path
+                    local_file_path = local_path / file_path
+                    
+                    # Check if file already exists
+                    if not force_download and local_file_path.exists():
+                        print(f"Skipped (already exists): {file_path}")
+                        skipped_count += 1
+                        continue
+                    
+                    # Create parent directories if they don't exist
+                    local_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Download the file
+                    self.api.hf_hub_download(
+                        repo_id=self.repo_id,
+                        filename=file_path,
+                        local_dir=str(local_path),
+                        local_dir_use_symlinks=False,
+                        force_download=force_download
+                    )
+                    
+                    print(f"Downloaded: {file_path}")
+                    downloaded_count += 1
+                    
+                except Exception as e:
+                    print(f"Failed to download {file_path}: {str(e)}")
+            
+            print(f"Download completed: {downloaded_count} files downloaded, {skipped_count} files skipped to {local_path}")
+            return str(local_path)
+            
+        except Exception as e:
+            print(f"Error downloading specific files: {str(e)}")
             raise
 
 # Example usage
 if __name__ == "__main__":
+    # Initialize the repo manager
+    dotenv.load_dotenv()
+    env = os.environ
+
+    sessionName = env.get("session_name", None)
+    huggingfaceRead = env.get("huggingface_read", None)
+    huggingfaceWrite = env.get("huggingface_write", None)
+    repoID = env.get("repo_ID", None)
+    
     # Create an instance of the repo manager
-    repo_manager = HuggingFaceRepoManager()
+    repo_manager = HuggingFaceRepoManager(sessionName, huggingfaceRead, huggingfaceWrite, repoID)
     
     # Example: Delete all repository content
-    repo_manager.deleteRepoContents(input("Enter directory name. Enter '__all' to clean all."))
+    # repo_manager.deleteRepoContents(input("Enter directory name. Enter '__all' to clean all."))
     
     # Example: Upload a directory
-    # repo_manager.uploadDirectoryContents("Data/parallelDQN_64_64_0.0001_0.9995_1000_0.995_1_", onlyHistory = True)
+    repo_manager.uploadDirectoryContents("Data/parallelDQN_64_64_0.0005_0.9999_1000_0.995_4_", onlyHistory = True)
+    
+    # Example: Download repository content
     
     print("HuggingFace Repository Manager initialized successfully!")
     print(f"Session: {repo_manager.session_name}")
