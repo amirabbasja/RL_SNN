@@ -8,6 +8,27 @@ import math
 import utils
 from natsort import natsorted
 
+def get_leaf_dir_paths(root_dir):
+    """
+    Retrieve a list of full paths to directories that have no child directories (leaf directories).
+
+    This function recursively traverses the directory tree starting from the specified root
+    directory and identifies directories that contain no subdirectories. These are considered
+    "leaf" directories in the directory tree.
+
+    Args:
+        root_dir (str): The path to the root directory to start the search from.
+                        Can be an absolute or relative path.
+
+    Returns:
+        list[str]: A list of full paths (as strings) to directories that have no subdirectories.
+    """
+    leaf_dirs = []
+    for root, dirs, _ in os.walk(root_dir):
+        if not dirs:  # If no subdirectories, this is a leaf directory
+            leaf_dirs.append(root)
+    return leaf_dirs
+
 def parseModelParams(filename_stem):
     """
     Parse model parameters from filename based on the pattern:
@@ -118,11 +139,10 @@ def plot_training_histories(directory_path):
                 rolling_avg = df['points'].rolling(window=100, min_periods=1).mean()
                 ax.plot(df['episode'], rolling_avg, color='red', linewidth=2)
             
-            ax.set_title(f"Run {model_info['runNumber']} - {checkpoint['elapsedTime']}s", fontsize=12, fontweight='bold')
+            ax.set_title(f"Run {model_info['runNumber']} - {checkpoint['elapsedTime']/60:.1f} m", fontsize=12, fontweight='bold')
             ax.set_xlabel('Episode')
             ax.set_ylabel('Points')
             ax.grid(True, alpha=0.3)
-            ax.legend()
             
             # Add some statistics to the plot
             max_points = df['points'].max()
@@ -157,7 +177,7 @@ def plot_training_histories(directory_path):
     plt.suptitle(f"Training Histories from {dir_path.name}", fontsize=16, y=0)
     plt.show()
     os.makedirs("./Data", exist_ok = True)
-    plt.savefig("./Data/savedFig.png")
+    plt.savefig(f"./Data/{os.path.basename(os.path.normpath(directory_path))}.png")
     
     return fig
 
@@ -166,13 +186,18 @@ def main():
     Main function to run the script with user input or default directory.
     """
     # Prompt user for directory path
-    directory_path = "./Data/parallelDQN_64_64_0.0001_0.9995_1000_0.995_2_"
+    directory_path = "downloads"
     
-    # Remove quotes if present
-    if directory_path.startswith('"') and directory_path.endswith('"'):
-        directory_path = directory_path[1:-1]
-    
-    plot_training_histories(directory_path)
+    # Get all directories in this path that have no child directories
+    allDirectories = get_leaf_dir_paths(directory_path)
+
+    for _dir in allDirectories:
+        print(f"Visualizing {_dir} ...")
+        # Remove quotes if present
+        if _dir.startswith('"') and _dir.endswith('"'):
+            _dir = _dir[1:-1]
+        
+        plot_training_histories(_dir)
 
 if __name__ == "__main__":
     main()

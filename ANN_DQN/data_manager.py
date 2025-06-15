@@ -44,6 +44,7 @@ class HuggingFaceRepoManager:
             command = input("are you sure (y/n)")
             if command != "y":
                 print("wrong command given. exiting.")
+                dirName = dirName.strip()
                 exit()
         try:
             # Get list of all files in the repository
@@ -56,8 +57,8 @@ class HuggingFaceRepoManager:
                     dirName += '/'
                 
                 # Filter files that are in the specified directory
-                files_to_delete = [f for f in repo_files if f.startswith(dirName)]
-                
+                files_to_delete = [f for f in repo_files if f.startswith(dirName)] if dirName != "__all/" else repo_files if dirName == "__all/" else []
+
                 if not files_to_delete:
                     print(f"No files found in directory: {dirName}")
                     return
@@ -88,57 +89,66 @@ class HuggingFaceRepoManager:
             print(f"Error deleting repository content: {str(e)}")
             raise
     
-    def uploadDirectoryContents(self, dirPath, onlyHistory = False):
+    def uploadDirectoryContents(self, pathsToUpload, onlyHistory = False):
         """
         Uploads all contents of a directory to the repository.
         
         Args:
-            dirPath (str): Path to the directory to upload
+            pathsToUpload (str or list): Path to the directory to upload. Can 
+                a list of paths as well.
             onlyHistory (bool): If True, reads the file and gets the lstHistory 
                 and uploads only it.
         """
-        dirPath = Path(dirPath)
+        if type(pathsToUpload) != list:
+            pathsToUpload = [pathsToUpload]
         
-        if not dirPath.exists():
-            raise FileNotFoundError(f"Directory not found: {dirPath}")
-        
-        if not dirPath.is_dir():
-            raise ValueError(f"Path is not a directory: {dirPath}")
-        
-        try:
-            if not onlyHistory:
-                # Upload the entire folder
-                self.api.upload_folder(
-                    folder_path=str(dirPath),
-                    path_in_repo = os.path.basename(os.path.normpath(dirPath)), 
-                    repo_id=self.repo_id,
-                    commit_message=f"Upload directory contents - {self.session_name}",
-                    ignore_patterns=[".git", "__pycache__", "*.pyc", ".DS_Store"]
-                )
-                print(f"Successfully uploaded contents of {dirPath} to {self.repo_id}")
-            else:
-                __lstDir = os.listdir(dirPath)
-                __info = {
-                    "platform": "huggingface",
-                    "api": self.api,
-                    "repoID": self.repo_id,
-                    "dirName": f"./{self.session_name}-{os.path.basename(os.path.normpath(dirPath))}",
-                    "private": False,
-                    "replace": True
-                }
+        for _path in pathsToUpload:
+            print(f"Processing {_path}...")
+            dirPath = Path(_path)
+            
+            if not dirPath.exists():
+                raise FileNotFoundError(f"Directory not found: {dirPath}")
+            
+            if not dirPath.is_dir():
+                raise ValueError(f"Path is not a directory: {dirPath}")
+            
+            try:
+                if not onlyHistory:
+                    # Upload the entire folder
+                    try:
+                        self.api.upload_folder(
+                            folder_path=str(dirPath),
+                            path_in_repo = os.path.basename(os.path.normpath(dirPath)), 
+                            repo_id=self.repo_id,
+                            commit_message=f"Upload directory contents - {self.session_name}",
+                            ignore_patterns=[".git", "__pycache__", "*.pyc", ".DS_Store"]
+                        )
+                        print(f"Successfully uploaded contents of {dirPath} to {self.repo_id}")
+                    except Exception as e:
+                        print(f"Error uploading directory contents: {str(e)}")
+                else:
+                    __lstDir = os.listdir(dirPath)
+                    __info = {
+                        "platform": "huggingface",
+                        "api": self.api,
+                        "repoID": self.repo_id,
+                        "dirName": f"./{self.session_name}-{os.path.basename(os.path.normpath(dirPath))}",
+                        "private": False,
+                        "replace": True
+                    }
 
-                for file in __lstDir:
-                    # Only upload files
-                    if not ".pth" in file: continue
+                    for file in __lstDir:
+                        # Only upload files
+                        if not ".pth" in file: continue
 
-                    file = os.path.join(dirPath, file)
-                    __data = torch.load(file, weights_only = False)
-                    __data = {"train_history": __data["train_history"], "elapsedTime": __data["elapsedTime"]}
-                    
-                    backUpToCloud(obj = __data, objName = f"{self.session_name}-{os.path.splitext(os.path.basename(file))[0]}", info = __info)
-        except Exception as e:
-            print(f"Error uploading directory contents: {str(e)}")
-            raise
+                        file = os.path.join(dirPath, file)
+                        __data = torch.load(file, weights_only = False)
+                        __data = {"train_history": __data["train_history"], "elapsedTime": __data["elapsedTime"]}
+                        
+                        backUpToCloud(obj = __data, objName = f"{self.session_name}-{os.path.splitext(os.path.basename(file))[0]}", info = __info)
+            except Exception as e:
+                print(f"Error uploading directory contents: {str(e)}")
+                raise
     
     def downloadRepoContents(self, local_dir=None, repo_path=None, file_pattern=None, force_download=False):
         """
@@ -312,7 +322,7 @@ if __name__ == "__main__":
     # repo_manager.deleteRepoContents(input("Enter directory name. Enter '__all' to clean all."))
     
     # Example: Upload a directory
-    repo_manager.uploadDirectoryContents("Data/parallelDQN_64_64_0.0005_0.9999_1000_0.995_4_", onlyHistory = True)
+    repo_manager.uploadDirectoryContents([os.path.join("./Data", _p) for _p in os.listdir("./Data")], onlyHistory = True)
     
     # Example: Download repository content
     
