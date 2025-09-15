@@ -10,5 +10,5 @@
     "extra_info": "",
     "max_run_time": 2700, 
     "train_max_time": 12600,
-    "upload_history": true
+    "upload_history": false
 }
